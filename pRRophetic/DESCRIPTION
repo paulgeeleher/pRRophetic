@@ -1,0 +1,21 @@
+Package: pRRophetic
+Type: Package
+Title: Predict clinical chemotherapeutic response from before-treatment tumor
+    gene expression levels.
+Version: 0.5
+Date: 2014-03-07
+Author: Paul Geeleher
+Maintainer: Paul Geeleher <paulgeeleher@gmail.com>
+Description: Predict clinical chemotherapeutic response from before-treatment
+    tumor gene expression levels. Cell lines from the Cancer Genome Project
+    (CGP) are used to train the statistical models. There are also various
+    functions for prediction/classificaion from gene expression data in
+    general.
+Imports:
+    sva,
+    car,
+    genefilter,
+    preprocessCore,
+    ridge,
+    stats
+License: GPL-2

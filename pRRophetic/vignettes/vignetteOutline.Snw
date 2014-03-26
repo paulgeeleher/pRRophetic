@@ -1,0 +1,203 @@
+\documentclass[a4paper]{article}
+\usepackage{placeins}
+\title{pRRophetic User's guide}
+\author{Dr. Paul Geeleher}
+\begin{document}
+\maketitle
+
+This file will demonstrate some use cases for the pRRophetic R packages. The package allows prediction of a phenotype from gene expression data. Here, we demonstrate the primary use case, which is prediction of clinical outcome using the Cancer Genome Project (CGP) cell line data. We also show that the package can be used for prediction of drug sensitivity in an external panel of cell lines (the Cancer Cell Line Encyclopedia (CCLE)) . Furthermore, we demonstrate that, at least in principle, the package can be used for prediction from clinical data (rather than just cell line data).
+
+First, load the library.
+<<>>=
+library(pRRophetic)
+library(ggplot2)
+set.seed(12345)
+@
+
+
+\section{Predicting clinical outcome from the CGP cell lines}
+
+The primary use case of pRRophetic is predicting clinical outcome to chemotherapy, from baseline tumor gene expression data. This is achieved using the CGP cell lines as a training set and 
+
+Load the bortezomib expression data. This is stored in a matrix with Gene Symbols as row names. Note that in order for "pRRopheticPredict" to work, the matrix MUST be annotated with official gene symbols.
+<<>>=
+data("bortezomibData") #exprDataBortezomib, bortIndex, studyResponse and studyIndex
+@
+
+Assess the normality of the data. For many of the drug in CGP, the data deviate wildly from a normal distribtion and should not be fit as the response variable in a linear model (i.e. pRRopheticPredict is based on linear ridge regression).
+<<fig=TRUE, echo=TRUE>>=
+pRRopheticQQplot("Bortezomib")
+@
+
+
+Perform 5-fold cross-validation on the training set (i.e. the CGP cell lines). This will give an indication of whether we may be able to predict clinical drug sensitivity. 
+<<>>=
+cvOut <- pRRopheticCV("Bortezomib", cvFold=5, testExprData=exprDataBortezomib)
+summary(cvOut)
+@
+
+Plot the cross validation predicted phenotype against the measured IC50s.
+<<fig=TRUE, echo=TRUE>>=
+plot(cvOut)
+@
+
+Based on the qqplot it is likely acceptable to use these data for prediction of bortezomib sensitivity. Predict bortezomib sensitivity using all cell lines, then only cell lines from hematological cancers and then only cell lines from derived from solid tumors.
+<<>>=
+predictedPtype <- pRRopheticPredict(exprDataBortezomib, "Bortezomib", 
+selection=1)
+predictedPtype_blood <- pRRopheticPredict(exprDataBortezomib, "Bortezomib", 
+"blood", selection=1)
+predictedPtype_solid <- pRRopheticPredict(exprDataBortezomib, "Bortezomib",
+"allSolidTumors", selection=1)
+@
+
+Compare these three types of models. Interestingly, models trained on only "blood" cancer cell lines perform best.
+<<>>=
+t.test(predictedPtype[((studyResponse == "PGx_Responder = NR") & bortIndex)], 
+predictedPtype[((studyResponse == "PGx_Responder = R") & bortIndex)], 
+alternative="greater")
+t.test(predictedPtype_blood[((studyResponse == "PGx_Responder = NR") & bortIndex)], 
+predictedPtype_blood[((studyResponse == "PGx_Responder = R") & bortIndex)],
+alternative="greater")
+t.test(predictedPtype_solid[((studyResponse == "PGx_Responder = NR") & bortIndex)], 
+predictedPtype_solid[((studyResponse == "PGx_Responder = R") & bortIndex)],
+alternative="greater")
+@
+
+
+Make a boxplot of the results of the blood-only model.
+<<fig=TRUE, echo=TRUE>>=
+df <- stack(list(NR=predictedPtype_blood[((studyResponse == "PGx_Responder = NR")
+& bortIndex)], R=predictedPtype_blood[((studyResponse == "PGx_Responder = R") & 
+bortIndex)]))
+ggplot(data=df, aes(y=values, x=ind)) + geom_boxplot(alpha=.3, fill=c("#CC0033", "#006633")) + 
+theme_bw() + ylab("Predicted Bortezomib Sensitivity") + xlab("Clinical Response")
+@
+
+\section{Predict drug sensitivity in CCLE. Demonstrate both linear and logistic models}
+
+Lets predict for PD0332991 using pRRopheticPredict(). First, load the CCLE expression and phenotype data. This loads two objects sensDataCcle and exprMatCcle.
+<<>>=
+data(ccleData) #sensDataCcle, exprMatCcle
+@
+
+Do 10 fold cross-validation on this drug.
+<<>>=
+cvOut_pd <- pRRopheticCV("PD.0325901", cvFold=5, testExprData=exprMatCcle)
+summary(cvOut_pd)
+@
+
+Plot the cross-validation predicted phenotype against the measured phenotype.
+<<fig=TRUE, echo=TRUE>>=
+plot(cvOut_pd)
+@
+
+Run the prediction for PD0325901 on the CCLE data.
+<<>>=
+predictedPtype_ccle <- pRRopheticPredict(exprMatCcle, "PD.0325901", selection=1)
+@
+
+
+Get the ActArea (a measure of drug sensitivity) for the CCLE cell lines for which we have just predicted IC50. We will not use IC50 values as they have been capped at the maximum drug screening concentration in CCLE.
+<<>>=
+cellLinesWithCcleIc50s <- names(predictedPtype_ccle)[names(predictedPtype_ccle) %in%
+sensDataCcle$CCLE.Cell.Line.Name]
+predCcleOrd <- predictedPtype_ccle[names(predictedPtype_ccle)]
+ccleActArea_pd <- -sensDataCcle$"ActArea"[sensDataCcle$Compound == "PD-0325901"]
+names(ccleActArea_pd) <- sensDataCcle$"CCLE.Cell.Line.Name"[sensDataCcle$Compound ==
+"PD-0325901"]
+ccleActAreaord <- ccleActArea_pd[cellLinesWithCcleIc50s]
+@
+
+Compare prediction to measured IC50, it is actually higher than the correlation achieved for remeasuring the drug sensitivity.
+<<>>=
+cor.test(predictedPtype_ccle[cellLinesWithCcleIc50s], ccleActAreaord, 
+method="spearman")
+@
+
+Plot the resulting correlation between predicted and measured values.
+<<fig=TRUE, echo=TRUE>>=
+df2 <- data.frame(predCcle=predictedPtype_ccle[cellLinesWithCcleIc50s], 
+actAreaCcle=ccleActAreaord)
+ggplot(data=df2, aes(y=predCcle, x=actAreaCcle)) + geom_point(alpha=0.5) + 
+geom_smooth(method=lm) + theme_bw() + xlab("Measured Activity Area") +
+ylab("Predicted Drug Sensitivity")
+@
+
+Next, do some prediction for Erlotinib, a targeted agent. To demonstrate how to create a logistic model, lets predict for erlotinib using pRRopheticLogisiticPredict(). This function will return the log odds of sensitivity
+<<>>=
+predictedPtype_ccle_erlotinib <- pRRopheticLogisticPredict(exprMatCcle, "Erlotinib",
+selection=1)
+@
+
+Get the ActArea for the CCLE cell lines for which we have just predicted IC50.
+<<>>=
+cellLinesWithCcleIc50s <- 
+names(predictedPtype_ccle_erlotinib)[names(predictedPtype_ccle_erlotinib) %in%
+sensDataCcle$CCLE.Cell.Line.Name]
+predCcleOrd <- predictedPtype_ccle_erlotinib[names(predictedPtype_ccle_erlotinib)]
+ccleActArea_pd <- sensDataCcle$"ActArea"[sensDataCcle$Compound == "Erlotinib"]
+names(ccleActArea_pd) <- sensDataCcle$"CCLE.Cell.Line.Name"[sensDataCcle$Compound ==
+"Erlotinib"]
+ccleActAreaord <- ccleActArea_pd[cellLinesWithCcleIc50s]
+@
+
+There are a very large number of cell lines resistant to Erlotinib (within the drug screening window), so a correlation is not an appropriate measure of concordance. So lets do a t-test between some of the most sensitive and resistant cell lines to assess whether signal is being captured by the predictions.
+<<>>=
+resistant <- names(sort(ccleActAreaord))[1:55] #55 highly resistant cell lines.
+sensitive <- names(sort(ccleActAreaord, decreasing=TRUE))[1:15] #15 sensitive
+t.test(predictedPtype_ccle_erlotinib[resistant], 
+predictedPtype_ccle_erlotinib[sensitive])
+@
+
+Despite the fact that IC50 values are not correlated for this drug between these studies, the most sensitive/resistant samples are separated highly significantly with this logistic models.
+<<>>=
+boxplot(list(Resistant=predictedPtype_ccle_erlotinib[resistant], 
+Sensitive=predictedPtype_ccle_erlotinib[sensitive]), pch=20, 
+vertical=TRUE, method="jitter", ylab="Log-odds of sensitivity")
+@
+
+
+\section{Clinical drug-sensitivity prediction from clinical data}
+
+Include, is an example, prediction from the bortezomib clinical data where we try to predict CR, PR, MR, NC, PD from CR, PR, MR, NC, PD. This serves as both an example of prediction directly from clinical data and of using a dataset other than the CGP from which to predict.
+
+First, prepare the training data and test expression data.
+<<>>=
+trainExpr <- exprDataBortezomib[, (detailedResponse %in% c(1,2,3,4,5)) & 
+studyIndex %in% c("studyCode = 25", "studyCode = 40")]
+trainPtype <- detailedResponse[(detailedResponse %in% c(1,2,3,4,5)) & 
+studyIndex %in% c("studyCode = 25", "studyCode = 40")]
+testExpr <- exprDataBortezomib[, (detailedResponse %in% c(1,2,3,4,5)) & 
+studyIndex %in% c("studyCode = 39")]
+@
+
+Calculate the predicted phenotype.
+<<>>=
+ptypeOut <- calcPhenotype(trainExpr, trainPtype, testExpr, selection=1)
+@
+
+We do capture some signal.
+<<>>=
+testPtype <- detailedResponse[(detailedResponse %in% c(1,2,3,4,5)) & 
+studyIndex %in% c("studyCode = 39")]
+cor.test(testPtype, ptypeOut, alternative="greater")
+@
+
+
+This t-test allows us to compare results directly to the cell line model, however, the cell line model outperforms this particular clinical model.
+<<>>=
+t.test(ptypeOut[testPtype %in% c(3,4,5)], ptypeOut[testPtype %in% c(1,2)], 
+alternative="greater")
+@
+
+<<>>=
+sessionInfo()
+@
+
+\end{document}
+
+
+
+
+

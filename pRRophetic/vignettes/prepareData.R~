@@ -1,0 +1,60 @@
+# This vignette explains how to acquire and prepare the data that is used in the main vignette.
+
+library("GEOquery")
+
+# setwd(/path/to/this/directory/)
+
+## acquire and prepare the bortezomib data
+
+bortezomib_mas5 <- getGEO("GSE9782")
+
+bortIndex <- pData(phenoData(bortezomib_mas5[[1]]))[,"characteristics_ch1.1"] == "treatment = PS341"
+dexIndex <- pData(phenoData(bortezomib_mas5[[1]]))[,"characteristics_ch1.1"] == "treatment = Dex"
+bortData <- bortezomib_mas5[[1]]
+studyIndex <- as.character(pData(bortData)[, "characteristics_ch1"])
+studyResponse <- as.character(pData(bortData)[, "characteristics_ch1.8"])
+exprDataBortezomib <- exprs(bortData)
+
+# map the Ids to gene symbols
+library("hgu133a.db") # version 2.8.0
+x <- hgu133aSYMBOL
+mapped_probes <- mappedkeys(x)
+names(mapped_probes) <- as.character(x[mapped_probes])
+affy2sym <- as.character(x[mapped_probes])
+sym2affy <- affy2sym
+names(sym2affy) <- names(affy2sym)
+rownames(exprDataBortezomib) <- sym2affy[rownames(exprDataBortezomib)]
+
+
+# encode CR, MR, PR, NC and PD as 1,2,3,4,5. This used in predicting from clinical data.
+detailedResponse <- as.character(pData(bortData)[, "characteristics_ch1.7"])
+detailedResponse[detailedResponse == "PGx_Response = IE"] <- 0
+detailedResponse[detailedResponse == "PGx_Response = PD"] <- 1
+detailedResponse[detailedResponse == "PGx_Response = NC"] <- 2
+detailedResponse[detailedResponse == "PGx_Response = MR"] <- 3
+detailedResponse[detailedResponse == "PGx_Response = PR"] <- 4
+detailedResponse[detailedResponse == "PGx_Response = CR"] <- 5
+detailedResponse <- as.numeric(detailedResponse)
+
+# save(exprDataBortezomib, bortIndex, studyResponse, studyIndex, detailedResponse, file="../data/bortezomibData.RData")
+
+## acquire and prepare the CGP data (I already have a vignette for the CGP data...)
+# The drug sensitivity file is downloaded from the CGP website at: ftp://ftp.sanger.ac.uk/pub4/cancerrxgene/current_release/gdsc_manova_output_w2.csv
+drugSensitivityDataCgp <- read.csv("../data/gdsc_manova_input_w2.csv", as.is=TRUE)[-1, ]
+
+# The CEL file annotation file can be downloaded from ArrayExpress at: https://www.ebi.ac.uk/arrayexpress/files/E-MTAB-783/E-MTAB-783.sdrf.txt 
+drugToCellLineDataCgp <- read.delim("../data/E-MTAB-783.sdrf.txt", as.is=TRUE)
+
+# save(drugSensitivityDataCgp, drugSensitivityDataCgp, file="../data/cgpPhenoData.RData")
+
+## prepare CCLE data
+# The CCLE data were downloaded from the CCLE website as Gene-centric RMA-normalized mRNA expression data using BrainArray ENTREZG v15 CDF file (filename CCLE_Expression_Entrez_2012-09-29.gct). CCLE drug data was also obtained from the CCLE website (filename CCLE_NP24.2009_Drug_data_2012.02.20.csv).
+
+# For details on how to prepare the CGP data, please see the vignette that accompanies this package. Note that to manually download the preprocess the CGP expression data, a machine with at least 32Gb of RAM will be required.
+
+
+
+
+
+
+
