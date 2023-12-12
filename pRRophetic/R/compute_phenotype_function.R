@@ -32,9 +32,9 @@ calcPhenotype <- function(trainingExprData, trainingPtype, testExprData, batchCo
 {
   
   # check if the supplied data are of the correct classes
-  if(class(testExprData) != "matrix") stop("ERROR: \"testExprData\" must be a matrix.");
-  if(class(trainingExprData) != "matrix") stop("ERROR: \"trainingExprData\" must be a matrix.");
-  if(class(trainingPtype) != "numeric") stop("ERROR: \"trainingPtype\" must be a numeric vector.");
+  # if(class(testExprData) != "matrix") stop("ERROR: \"testExprData\" must be a matrix.");
+  # if(class(trainingExprData) != "matrix") stop("ERROR: \"trainingExprData\" must be a matrix.");
+  # if(class(trainingPtype) != "numeric") stop("ERROR: \"trainingPtype\" must be a numeric vector.");
   if(ncol(trainingExprData) != length(trainingPtype)) stop("The training phenotype must be of the same length as the number of columns of the training expressin matrix.");
   
   # check if an adequate number of training and test samples have been supplied.
